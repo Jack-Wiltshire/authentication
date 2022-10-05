@@ -22,7 +22,7 @@ app.use(express.static("public"));
 app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use(session({
-    secret: "Our little secrect to protect our encryptions.",
+    secret: process.env.SECRET,
     resave: false,
     saveUninitialized: false
 }));
@@ -39,7 +39,8 @@ mongoose.connect("mongodb://localhost:27017/userDB", { useNewUrlParser: true });
 const userSchema = new mongoose.Schema({
     email: String,
     password: String,
-    googleId: String
+    googleId: String,
+    secret: String
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -71,7 +72,6 @@ passport.use(new GoogleStrategy({
     userProfileUrl: "https://www.googleapis.com/oauth2/v3/userinfo"
   },
   function(accessToken, refreshToken, profile, cb) {
-    console.log(profile);
     User.findOrCreate({ googleId: profile.id }, function (err, user) {
       return cb(err, user);
     });
@@ -138,8 +138,34 @@ app.route("/register")
         });
     });
 
-    app.route("/auth/google")
-        .get(passport.authenticate("google", {scope: ["profile"]}));
+app.route("/submit")
+    .get(function(req,res){
+        if (req.isAuthenticated()) {
+            res.render("submit");
+        } else {
+            res.redirect("/login");
+        }
+    })
+    .post(function(req,res){
+        const submittedSecret = req.body.secret;
+        
+        console.log(req.user._id.match(/^[0-9a-fa-F]{24}$/));
+        User.findById(req.user._nodid.match(/^[0-9a-fa-F]{24}$/), function(err, foundUser){
+            if(err) {
+                console.log(err);
+            } else {
+                if(foundUser) {
+                    foundUser.secret = submittedSecret;
+                    foundUser.save(function() {
+                        res.redirect("/secrets");
+                    });
+                }
+            }
+        });
+    });
+
+app.route("/auth/google")
+    .get(passport.authenticate("google", {scope: ["profile"]}));
 
 app.route("/auth/google/secrets")
     .get(passport.authenticate("google", {failureRedirect: "/login"}),
