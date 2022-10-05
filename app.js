@@ -49,33 +49,33 @@ userSchema.plugin(findOrCreate);
 const User = new mongoose.model("User", userSchema);
 
 passport.use(User.createStrategy());
-passport.serializeUser(function(user, cb) {
-    process.nextTick(function() {
-      return cb(null, {
-        id: user.id,
-        username: user.username,
-        picture: user.picture
-      });
+passport.serializeUser(function (user, cb) {
+    process.nextTick(function () {
+        return cb(null, {
+            id: user.id,
+            username: user.username,
+            picture: user.picture
+        });
     });
-  });
-  
-  passport.deserializeUser(function(user, cb) {
-    process.nextTick(function() {
-      return cb(null, user);
+});
+
+passport.deserializeUser(function (user, cb) {
+    process.nextTick(function () {
+        return cb(null, user);
     });
-  });
+});
 
 passport.use(new GoogleStrategy({
     clientID: process.env.CLIENT_ID,
     clientSecret: process.env.CLIENT_SECRET,
     callbackURL: "http://localhost:3000/auth/google/secrets",
     userProfileUrl: "https://www.googleapis.com/oauth2/v3/userinfo"
-  },
-  function(accessToken, refreshToken, profile, cb) {
-    User.findOrCreate({ googleId: profile.id }, function (err, user) {
-      return cb(err, user);
-    });
-  }
+},
+    function (accessToken, refreshToken, profile, cb) {
+        User.findOrCreate({ googleId: profile.id }, function (err, user) {
+            return cb(err, user);
+        });
+    }
 ));
 
 //Routes
@@ -84,22 +84,15 @@ app.get("/", function (req, res) {
     res.render("home");
 });
 
-app.get("/secrets", function (req, res) {
-    if (req.isAuthenticated()) {
-        res.render("secrets");
-    } else {
-        res.redirect("/login");
-    }
-});
+app.route("/auth/google")
+    .get(passport.authenticate("google", { scope: ["profile"] }));
 
-app.get("/logout", function(req,res){
-    req.logout(function(err){
-        if(err) {
-            return next(err);
+app.route("/auth/google/secrets")
+    .get(passport.authenticate("google", { failureRedirect: "/login" }),
+        function (req, res) {
+            res.redirect("/secrets");
         }
-        res.redirect("/");
-    });
-});
+    );
 
 app.route("/login")
     .get(function (req, res) {
@@ -132,47 +125,54 @@ app.route("/register")
                 res.redirect("/register");
             } else {
                 passport.authenticate("local")(req, res, function () {
-                    res.redirect("/secrets")
+                    res.redirect("/secrets");
                 });
             }
         });
     });
 
+app.get("/secrets", function (req, res) {
+    if (req.isAuthenticated()) {
+        res.render("secrets");
+    } else {
+        res.redirect("/login");
+    }
+});
+
+app.get("/logout", function (req, res) {
+    req.logout(function (err) {
+        if (err) {
+            return next(err);
+        }
+        res.redirect("/");
+    });
+});
+
 app.route("/submit")
-    .get(function(req,res){
+    .get(function (req, res) {
         if (req.isAuthenticated()) {
             res.render("submit");
         } else {
             res.redirect("/login");
         }
     })
-    .post(function(req,res){
+    .post(function (req, res) {
         const submittedSecret = req.body.secret;
-        
-        console.log(req.user._id.match(/^[0-9a-fa-F]{24}$/));
-        User.findById(req.user._nodid.match(/^[0-9a-fa-F]{24}$/), function(err, foundUser){
-            if(err) {
+
+        console.log(req.user);
+        User.findById(req.user, function (err, foundUser) {
+            if (err) {
                 console.log(err);
             } else {
-                if(foundUser) {
+                if (foundUser) {
                     foundUser.secret = submittedSecret;
-                    foundUser.save(function() {
+                    foundUser.save(function () {
                         res.redirect("/secrets");
                     });
                 }
             }
         });
     });
-
-app.route("/auth/google")
-    .get(passport.authenticate("google", {scope: ["profile"]}));
-
-app.route("/auth/google/secrets")
-    .get(passport.authenticate("google", {failureRedirect: "/login"}),
-    function(req,res) {
-        res.redirect("/secrets");
-    }
-    );
 
 //Server Connection
 
