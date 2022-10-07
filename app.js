@@ -22,7 +22,7 @@ app.use(express.static("public"));
 app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use(session({
-    secret: process.env.SECRET,
+    secret: "This is our little secret.",
     resave: false,
     saveUninitialized: false
 }));
@@ -49,19 +49,13 @@ userSchema.plugin(findOrCreate);
 const User = new mongoose.model("User", userSchema);
 
 passport.use(User.createStrategy());
-passport.serializeUser(function (user, cb) {
-    process.nextTick(function () {
-        return cb(null, {
-            id: user.id,
-            username: user.username,
-            picture: user.picture
-        });
-    });
+passport.serializeUser(function (user, done) {
+    done(null, user.id);
 });
 
-passport.deserializeUser(function (user, cb) {
-    process.nextTick(function () {
-        return cb(null, user);
+passport.deserializeUser(function (id, done) {
+    User.findById(id, function (err, user) {
+        done(err, user);
     });
 });
 
@@ -132,11 +126,15 @@ app.route("/register")
     });
 
 app.get("/secrets", function (req, res) {
-    if (req.isAuthenticated()) {
-        res.render("secrets");
-    } else {
-        res.redirect("/login");
-    }
+    User.find({"secret": {$ne: null}}, function(err,foundUsers){
+        if(err) {
+            console.log(err);
+        } else {
+            if (foundUsers) {
+                res.render("secrets", {usersWithSecrets: foundUsers})
+            }
+        }
+    })
 });
 
 app.get("/logout", function (req, res) {
@@ -158,11 +156,11 @@ app.route("/submit")
     })
     .post(function (req, res) {
         const submittedSecret = req.body.secret;
+        console.log(req.user._id);
 
-        console.log(req.user);
-        User.findById(req.user, function (err, foundUser) {
+        User.findById(req.user._id, function (err, foundUser) {
             if (err) {
-                console.log(err);
+                console.log(err)
             } else {
                 if (foundUser) {
                     foundUser.secret = submittedSecret;
